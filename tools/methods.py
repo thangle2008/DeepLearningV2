@@ -41,22 +41,6 @@ def random_crop(img, new_dim):
 
     return new_img
 
-
-def augment(data, crop_dim):
-    """
-    Augment a dataset by random cropping.
-    The data must have shape (n_samples, n_channels, width, height).
-    """
-
-    new_data = []
-    for img in data:
-        new_img = np.array(img)
-        new_img = random_crop(new_img, crop_dim)
-    
-        new_data.append(new_img)
-    return np.array(new_data)
-
-
 class DeepLearning():
     """
     Represents a deep learning network using a given model.
@@ -69,13 +53,28 @@ class DeepLearning():
         self._network = None
     
     @staticmethod
-    def _iterate_minibatches(X, y, batch_size, shuffle=False, seed=42):
+    def _augment(data, crop_dim):
+        """
+        Augment a dataset by random cropping.
+        The data must have shape (n_samples, n_channels, width, height).
+        """
+
+        new_data = []
+        for img in data:
+            new_img = np.array(img)
+            new_img = random_crop(new_img, crop_dim)
+        
+            new_data.append(new_img)
+        return np.array(new_data)
+
+    @staticmethod
+    def _iterate_minibatches(X, y, batch_size, shuffle=False):
         """
         Generates data batches to feed into the network.
         """
 
         if shuffle:
-            X, y = sklearn.utils.shuffle(X, y, random_state=seed)
+            X, y = sklearn.utils.shuffle(X, y)
 
         n_batches = X.shape[0] / batch_size
         for i in range(n_batches):
@@ -84,12 +83,12 @@ class DeepLearning():
 
 
     def train(self, dirname, n_epochs, batch_size=32, 
-            target_size=(140, 140), crop_dim=128):
+            target_size=(140, 140), crop_dim=128, seed=None):
         """Train the classfier with the given model."""
 
         # split the data and determine components
         print "Splitting data ..."
-        
+
         (X_train, y_train), (X_val, y_val), n_classes = dataprocessing.split_data(
                                             dirname, target_size, transpose=True)
 
@@ -102,7 +101,6 @@ class DeepLearning():
         print ""
         print "Number of training samples:", X_train.shape, X_train.dtype
         print "Number of validation samples:", X_val.shape, X_val.dtype
-        print y_train.shape
 
         # load and compile network
         input_shape = (3, crop_dim, crop_dim)
@@ -115,8 +113,11 @@ class DeepLearning():
 
         print ""
         print "Begin training ..."
+        if seed:
+            random.seed(seed)
+
         best_val_acc = 0.0
-        for epoch in range(n_epochs):
+        for epoch in range(1, n_epochs):
             # train on batches
             train_err = 0.0
             train_batches = 0
@@ -124,7 +125,7 @@ class DeepLearning():
 
             for X_batch, y_batch in self._iterate_minibatches(X_train, y_train, 
                                                     batch_size, shuffle=True):
-                X_augmented = augment(X_batch, crop_dim)
+                X_augmented = self._augment(X_batch, crop_dim)
                 batch_err, batch_acc = network.train_on_batch(X_augmented, 
                                                             y_batch)
                 train_err += batch_err
@@ -137,8 +138,8 @@ class DeepLearning():
             # print out information at the end of each epoch
             print "Epoch {}/{} took {:.3f}s: ".format(epoch, n_epochs,
                                                 time.time()-start_time),
-            print "Training loss = {},".format(train_err / train_batches),
-            print "Validation loss = {},".format(val_err),
-            print "Validation acc = {:.2f}%.".format(val_acc * 100)
+            print "training loss = {} --".format(train_err / train_batches),
+            print "validation loss = {} --".format(val_err),
+            print "validation acc = {:.2f}%.".format(val_acc * 100)
 
         print "Best validation accuracy = {:.2f}".format(best_val_acc * 100)
