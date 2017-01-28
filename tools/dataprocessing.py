@@ -24,13 +24,12 @@ def load_img(img_path, class_id, target_size, transpose=False):
 
 def split_data(folder, target_size, train=.6, transpose=False, seed=42):
     """
-    Loads the data in the specified folder and splits them into training,
-    validation and test sets. The amount of data in each dataset 
+    Loads the data in the specified folder and splits them into training 
+    and test sets. The amount of data in each dataset 
     is determined by the proportion. The folder should have different 
     subdirectory for each category. 
-    Also returns the following information: training, 
-    validation and test sets (as numpy arrays) as well as the number 
-    of categories.
+    Returns the following information: training, and test sets 
+    (as numpy arrays) as well as the number of categories.
     """
 
     data = []

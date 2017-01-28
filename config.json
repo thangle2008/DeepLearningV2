@@ -1,0 +1,10 @@
+{
+    "model": "conv3",
+    "optimizer": "adagrad",
+    "num_epoches": 100,
+    "batch_size": 32,
+    "options": {
+        "lr": 0.009,
+        "epsilon": 1e-03
+    }
+}

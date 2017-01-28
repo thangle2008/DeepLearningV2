@@ -82,9 +82,9 @@ class DeepLearning():
             yield X[idx:idx+batch_size], y[idx:idx+batch_size]
 
 
-    def train(self, dirname, n_epochs, batch_size=32, 
-            target_size=(140, 140), crop_dim=128, seed=None):
-        """Train the classfier with the given model."""
+    def train(self, dirname, n_epochs, batch_size=32, target_size=(140, 140), 
+                crop_dim=128, optimizer='adagrad', options=None, seed=None):
+        """Train a classfier with the given model."""
 
         # split the data and determine components
         print "Splitting data ..."
@@ -107,17 +107,23 @@ class DeepLearning():
         self._network = network = self._model_module.build_model(
                                     input_shape, n_classes)
 
-        optimizer = Adagrad(lr=0.009, epsilon=1e-03)
-        network.compile(optimizer=optimizer, loss='categorical_crossentropy',
-                        metrics=['accuracy'])
+        optimizers_list = {
+            'adagrad': Adagrad
+        }
+
+        opt = optimizers_list[optimizer](**options)
+        network.compile(optimizer=opt, loss='categorical_crossentropy', 
+                    metrics=['accuracy'])
 
         print ""
         print "Begin training ..."
+        print "Parameters:", opt.get_config()
+        
         if seed:
             random.seed(seed)
 
         best_val_acc = 0.0
-        for epoch in range(1, n_epochs):
+        for epoch in range(1, n_epochs+1):
             # train on batches
             train_err = 0.0
             train_batches = 0
