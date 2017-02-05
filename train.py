@@ -1,6 +1,7 @@
 import json
 import argparse
 
+from hyperopt import hp
 from tools.methods import DeepLearning
 
 def run(args):
@@ -10,9 +11,14 @@ def run(args):
     config = json.load(f)
 
     # load model and train network
-    dl = DeepLearning(config['model'])
+    models_list = set(['conv3', 'alexnet'])
 
-    dl.train(args.dir, config['num_epoches'], batch_size=config['batch_size'],
+    if config['model'] not in models_list:
+        print "Model does not exist."
+        return
+
+    dl = DeepLearning(config['model'])
+    dl.train(args.dir, config['num_epochs'], batch_size=config['batch_size'],
             optimizer=config['optimizer'], options=config['options'], seed=42)
 
 

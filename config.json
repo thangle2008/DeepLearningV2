@@ -1,7 +1,7 @@
 {
     "model": "conv3",
     "optimizer": "adagrad",
-    "num_epoches": 100,
+    "num_epochs": 100,
     "batch_size": 32,
     "options": {
         "lr": 0.009,

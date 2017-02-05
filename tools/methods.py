@@ -1,4 +1,5 @@
 import os
+import sys
 import importlib
 import random
 import time
@@ -9,6 +10,9 @@ import sklearn
 import keras
 from keras.utils import np_utils
 from keras.optimizers import Adagrad
+from keras.wrappers.scikit_learn import KerasClassifier
+
+from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 import dataprocessing
 
@@ -41,10 +45,15 @@ def random_crop(img, new_dim):
 
     return new_img
 
+
 class DeepLearning():
     """
     Represents a deep learning network using a given model.
     """
+
+    optimizers_list = {
+        'adagrad': Adagrad
+    }
 
     def __init__(self, model):
         """Loads model"""
@@ -81,13 +90,9 @@ class DeepLearning():
             idx = i * n_batches
             yield X[idx:idx+batch_size], y[idx:idx+batch_size]
 
-
-    def train(self, dirname, n_epochs, batch_size=32, target_size=(140, 140), 
-                crop_dim=128, optimizer='adagrad', options=None, seed=None):
-        """Train a classfier with the given model."""
-
-        # split the data and determine components
-        print "Splitting data ..."
+    @staticmethod
+    def _load_data(dirname, target_size):
+        """Loads and preprocesses training and validation data."""
 
         (X_train, y_train), (X_val, y_val), n_classes = dataprocessing.split_data(
                                             dirname, target_size, transpose=True)
@@ -98,31 +103,31 @@ class DeepLearning():
         y_train = np_utils.to_categorical(y_train, n_classes)
         y_val = np_utils.to_categorical(y_val, n_classes)
 
-        print ""
-        print "Number of training samples:", X_train.shape, X_train.dtype
-        print "Number of validation samples:", X_val.shape, X_val.dtype
+        return (X_train, y_train), (X_val, y_val), n_classes
+
+
+    def _train_data(self, train_data, n_classes, n_epochs, val_data=None, 
+                    batch_size=32, crop_dim=128, optimizer='adagrad', options=None):
+        """Helper function for training data."""
+
+        X_train, y_train = train_data
+        X_val, y_val = val_data
 
         # load and compile network
         input_shape = (3, crop_dim, crop_dim)
         self._network = network = self._model_module.build_model(
                                     input_shape, n_classes)
 
-        optimizers_list = {
-            'adagrad': Adagrad
-        }
-
-        opt = optimizers_list[optimizer](**options)
+        opt = self.optimizers_list[optimizer](**options)
         network.compile(optimizer=opt, loss='categorical_crossentropy', 
                     metrics=['accuracy'])
 
         print ""
         print "Begin training ..."
         print "Parameters:", opt.get_config()
-        
-        if seed:
-            random.seed(seed)
 
         best_val_acc = 0.0
+        best_val_loss = None
         for epoch in range(1, n_epochs+1):
             # train on batches
             train_err = 0.0
@@ -141,6 +146,8 @@ class DeepLearning():
             val_err, val_acc = network.evaluate(X_val_cropped, y_val, 
                                                 batch_size=batch_size)
             best_val_acc = max(val_acc, best_val_acc)
+            best_val_loss = min(val_err, best_val_loss) if best_val_loss else val_err
+
             # print out information at the end of each epoch
             print "Epoch {}/{} took {:.3f}s: ".format(epoch, n_epochs,
                                                 time.time()-start_time),
@@ -149,3 +156,68 @@ class DeepLearning():
             print "validation acc = {:.2f}%.".format(val_acc * 100)
 
         print "Best validation accuracy = {:.2f}".format(best_val_acc * 100)
+        return best_val_loss
+
+
+    def train(self, dirname, n_epochs, batch_size=32, target_size=(140, 140), 
+                crop_dim=128, optimizer='adagrad', options=None, seed=None):
+        """Train a classfier with the given model."""
+
+        # split the data and determine components
+        print "Splitting data ..."
+
+        (X_train, y_train), (X_val, y_val), n_classes = self._load_data(dirname,
+                                                                    target_size)
+
+        print ""
+        print "Number of training samples:", X_train.shape, X_train.dtype
+        print "Number of validation samples:", X_val.shape, X_val.dtype
+        
+        if seed:
+            random.seed(seed)
+
+        self._train_data((X_train, y_train), n_classes, n_epochs, val_data=(X_val, y_val), 
+                batch_size=batch_size, crop_dim=crop_dim, optimizer=optimizer, 
+                options=options)
+
+
+    def grid_search(self, dirname, space, max_evals, target_size=(140, 140), 
+                    crop_dim=128):
+        """
+        Optimize parameters using grid search.
+        The search space is expected to provide number of epochs, batch_size
+        and the training algorithm (adagrad, adadelta, ...).
+        """
+
+        # split the data and determine components
+        print "Splitting data ..."
+
+        (X_train, y_train), (X_val, y_val), n_classes = self._load_data(dirname,
+                                                                target_size)
+
+        print ""
+        print "Number of training samples:", X_train.shape, X_train.dtype
+        print "Number of validation samples:", X_val.shape, X_val.dtype
+
+        # define objective function to minimize
+        def objective(params):
+            batch_size = params['batch_size']
+            n_epochs = params['num_epochs']
+            optimizer = params['optimizer']
+
+            params.pop('batch_size', None)
+            params.pop('num_epochs', None)
+            params.pop('optimizer', None)
+
+            score = self._train_data((X_train, y_train), n_classes, n_epochs, 
+                val_data=(X_val, y_val), batch_size=batch_size, 
+                crop_dim=crop_dim, optimizer=optimizer, options=params)
+
+            sys.stdout.flush()
+            return {'loss': score, 'status': STATUS_OK}
+
+        trials = Trials()
+        best = fmin(objective, space, algo=tpe.suggest, max_evals=max_evals, 
+                    trials=trials)
+
+        print 'best:', best
