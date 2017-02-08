@@ -9,7 +9,7 @@ import sklearn
 
 import keras
 from keras.utils import np_utils
-from keras.optimizers import Adagrad
+from keras.optimizers import Adagrad, Adadelta, Adam
 from keras.wrappers.scikit_learn import KerasClassifier
 
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
@@ -52,7 +52,9 @@ class DeepLearning():
     """
 
     optimizers_list = {
-        'adagrad': Adagrad
+        'adagrad': Adagrad,
+        'adadelta': Adadelta,
+        'adam': Adam
     }
 
     def __init__(self, model):
@@ -107,7 +109,7 @@ class DeepLearning():
 
 
     def _train_data(self, train_data, n_classes, n_epochs, val_data=None, 
-                    batch_size=32, crop_dim=128, optimizer='adagrad', options=None):
+                    batch_size=32, crop_dim=128, optimizer='adagrad', options={}):
         """Helper function for training data."""
 
         X_train, y_train = train_data
@@ -124,6 +126,7 @@ class DeepLearning():
 
         print ""
         print "Begin training ..."
+        print "Optimizer: ", opt.__class__.__name__
         print "Parameters:", opt.get_config()
 
         best_val_acc = 0.0
@@ -142,6 +145,7 @@ class DeepLearning():
                 train_err += batch_err
                 train_batches += 1
 
+            # evaluate on validation data
             X_val_cropped = center_crop(X_val, crop_dim)
             val_err, val_acc = network.evaluate(X_val_cropped, y_val, 
                                                 batch_size=batch_size)
@@ -155,12 +159,13 @@ class DeepLearning():
             print "validation loss = {} --".format(val_err),
             print "validation acc = {:.2f}%.".format(val_acc * 100)
 
-        print "Best validation accuracy = {:.2f}".format(best_val_acc * 100)
+        print "Best validation accuracy = {:.2f},".format(best_val_acc * 100),
+        print "Best validation loss = {}".format(best_val_loss)
         return best_val_loss
 
 
     def train(self, dirname, n_epochs, batch_size=32, target_size=(140, 140), 
-                crop_dim=128, optimizer='adagrad', options=None, seed=None):
+                crop_dim=128, optimizer='adagrad', options={}, seed=None):
         """Train a classfier with the given model."""
 
         # split the data and determine components
@@ -203,15 +208,13 @@ class DeepLearning():
         def objective(params):
             batch_size = params['batch_size']
             n_epochs = params['num_epochs']
-            optimizer = params['optimizer']
-
-            params.pop('batch_size', None)
-            params.pop('num_epochs', None)
-            params.pop('optimizer', None)
+            
+            optimizer = params['optimizer']['type']
+            opt_params = params['optimizer']['params']
 
             score = self._train_data((X_train, y_train), n_classes, n_epochs, 
                 val_data=(X_val, y_val), batch_size=batch_size, 
-                crop_dim=crop_dim, optimizer=optimizer, options=params)
+                crop_dim=crop_dim, optimizer=optimizer, options=opt_params)
 
             sys.stdout.flush()
             return {'loss': score, 'status': STATUS_OK}

@@ -6,13 +6,40 @@ from tools.methods import DeepLearning
 def run(args):
     space = {
         'batch_size': 32,
-        'num_epochs': 50,
-        'optimizer': 'adagrad',
-        'lr': hp.uniform('lr', 0.003, 0.03),
-        'epsilon': 1e-03
+        'num_epochs': 100,
+        'optimizer': hp.choice('optimizer', [
+            {
+                'type': 'adam',
+                'params': {
+                'lr': 0.0017249684527549864,
+                'epsilon': 1e-03
+                }
+            },
+            {
+                'type': 'adagrad',
+                'params': {
+                'lr': 0.008358387907938093,
+                'epsilon': 1e-03
+                }
+            },
+            {
+                'type': 'adadelta',
+                'params': {
+                'lr': 0.07857133605571984,
+                'epsilon': 1e-03
+                }
+            }
+        ])
+        # 'optimizer': {
+        #     'type': 'adam',
+        #     'params': {
+        #         'lr': hp.uniform('lr', 0.0005, 0.005),
+        #         'epsilon': 1e-03
+        #     }
+        # }
     }
     dl = DeepLearning('conv3')
-    dl.grid_search(args.dir, space, 10)
+    dl.grid_search(args.dir, space, 20)
 
 
 if __name__ == '__main__':
