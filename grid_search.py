@@ -39,7 +39,7 @@ def run(args):
         # }
     }
     dl = DeepLearning('conv3')
-    dl.grid_search(args.dir, space, 20)
+    dl.grid_search(args.dir, space, max_evals=20)
 
 
 if __name__ == '__main__':

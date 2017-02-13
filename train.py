@@ -10,16 +10,13 @@ def run(args):
     f = open(args.config, 'r')
     config = json.load(f)
 
+    optimizer = config['optimizer']
+
     # load model and train network
-    models_list = set(['conv3', 'alexnet'])
-
-    if config['model'] not in models_list:
-        print "Model does not exist."
-        return
-
     dl = DeepLearning(config['model'])
-    dl.train(args.dir, config['num_epochs'], batch_size=config['batch_size'],
-            optimizer=config['optimizer'], options=config['options'], seed=42)
+    dl.train(args.dir, optimizer['type'], config['num_epochs'], config['batch_size'],
+                target_size=tuple(config['target_size']), crop_dim=config['crop_dim'],
+                **optimizer['params'])
 
 
 if __name__ == '__main__':

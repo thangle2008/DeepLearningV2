@@ -1,10 +1,14 @@
 {
     "model": "conv3",
-    "optimizer": "adagrad",
     "num_epochs": 100,
     "batch_size": 32,
-    "options": {
-        "lr": 0.009,
-        "epsilon": 1e-03
+    "target_size": [140, 140],
+    "crop_dim": 128, 
+    "optimizer": {
+        "type": "adam",
+        "params": {
+            "lr": 0.0017249684527549864,
+            "epsilon": 1e-03
+        }
     }
 }
