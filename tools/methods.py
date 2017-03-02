@@ -69,7 +69,7 @@ class DeepLearning():
         self._network = None
     
     @staticmethod
-    def _augment(data, crop_dim):
+    def _augment(data, crop_dim, color_jitter=True):
         """
         Augment a dataset by random cropping.
         The data must have shape (n_samples, n_channels, width, height).
@@ -78,6 +78,13 @@ class DeepLearning():
         new_data = []
         for img in data:
             new_img = np.array(img)
+
+            if color_jitter:
+                new_img = new_img.transpose(1, 2, 0)
+                new_img = dataprocessing.color_jitter(new_img)
+                new_img = new_img.transpose(2, 0, 1)
+                new_img = keras.backend.cast_to_floatx(new_img) / 255.0
+
             new_img = random_crop(new_img, crop_dim)
         
             new_data.append(new_img)
@@ -103,10 +110,12 @@ class DeepLearning():
 
         # check if this is pickled data
         if os.path.isfile(path):
-            (X_train, y_train), (X_val, y_val), n_classes = DeepLearning._load_pickled_data(path)
+            (X_train, y_train), (X_val, y_val), class_map = DeepLearning._load_pickled_data(path)
         else:
-            (X_train, y_train), (X_val, y_val), n_classes = dataprocessing.split_data(
+            (X_train, y_train), (X_val, y_val), class_map = dataprocessing.split_data(
                                             path, target_size, transpose=True)
+
+        n_classes = len(class_map)
 
         X_train = keras.backend.cast_to_floatx(X_train) / 255.0
         X_val = keras.backend.cast_to_floatx(X_val) / 255.0
@@ -120,15 +129,15 @@ class DeepLearning():
     def _load_pickled_data(path):
         """
         Loads pickled data. 
-        Assume that the data are n_classes, test set, train set.
+        Assume that the data are class_map, test set, train set.
         """
 
         with open(path, 'rb') as fp:
-            n_classes = cPickle.load(fp)
+            class_map = cPickle.load(fp)
             test_data = cPickle.load(fp)
             train_data = cPickle.load(fp)
 
-            return train_data, test_data, n_classes
+            return train_data, test_data, class_map
 
 
     def _train_data(self, train_data, n_classes, optimizer, val_data=None, n_epochs=100, 
@@ -155,6 +164,8 @@ class DeepLearning():
 
         best_val_acc = 0.0
         best_val_loss = None
+        best_weights = None
+
         for epoch in range(1, n_epochs+1):
             # train on batches
             train_err = 0.0
@@ -175,7 +186,9 @@ class DeepLearning():
             val_err, val_acc = network.evaluate(X_val_cropped, y_val, 
                                                 batch_size=batch_size)
             best_val_acc = max(val_acc, best_val_acc)
-            best_val_loss = min(val_err, best_val_loss) if best_val_loss else val_err
+            if (best_val_loss is None) or (best_val_loss > val_err):
+                best_val_loss = val_err
+                best_weights = network.get_weights()
 
             # print out information at the end of each epoch
             print "Epoch {}/{} took {:.3f}s: ".format(epoch, n_epochs,
@@ -186,6 +199,11 @@ class DeepLearning():
 
         print "Best validation accuracy = {:.2f},".format(best_val_acc * 100),
         print "Best validation loss = {}".format(best_val_loss)
+
+        # save model to use as a classifier
+        network.set_weights(best_weights)
+        network.save('experiments/my_model.h5')
+
         return best_val_loss
 
 

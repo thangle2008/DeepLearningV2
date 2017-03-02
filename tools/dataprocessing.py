@@ -2,10 +2,13 @@ import os
 import re
 import multiprocessing
 import cPickle
+import random
 
 import numpy as np
 from sklearn.model_selection import StratifiedShuffleSplit
-from scipy.misc import imread, imresize
+from scipy.misc import imread, imresize, imrotate, toimage, fromimage
+import PIL
+from PIL.ImageEnhance import Brightness, Contrast, Color 
 
 def _load_img(img_path, class_id, target_size, transpose=False):
     """
@@ -23,6 +26,42 @@ def _load_img(img_path, class_id, target_size, transpose=False):
     return img, class_id
 
 
+#### Color jittering functions
+def _adjust(img, alpha, etype):
+    if alpha == 0.0:
+        return img
+
+    pil_img = toimage(img)
+
+    enhancer = None
+    if etype == "brightness":
+        enhancer = Brightness(pil_img)
+    elif etype == "color":
+        enhancer = Color(pil_img)
+    elif etype == "contrast":
+        enhancer = Contrast(pil_img)
+
+    return fromimage(enhancer.enhance(alpha))
+
+
+def color_jitter(img):
+    """
+    Randomly adjust brightness, contrast and color of the image.
+    """
+    etypes = ['brightness', 'contrast', 'color']
+
+    # Random the order of enhancement 
+    random.shuffle(etypes)
+
+    # Adjust consecutively
+    new_img = np.array(img)
+    for e in etypes:
+        alpha = random.uniform(0.5, 1.5)
+        new_img = _adjust(new_img, alpha, e)
+
+    return new_img
+
+
 def split_data(folder, target_size, train=.6, transpose=False):
     """
     Loads the data in the specified folder and splits them into training 
@@ -30,12 +69,13 @@ def split_data(folder, target_size, train=.6, transpose=False):
     is determined by the proportion. The folder should have different 
     subdirectory for each category. 
     Returns the following information: training, and test sets 
-    (as numpy arrays) as well as the number of categories.
+    (as numpy arrays) as well as the mapping from num to class name.
     """
 
     data = []
     categories = []
     num_classes = 0
+    class_map = dict()
 
     # get the file paths
     for root, dirnames, filenames in os.walk(folder):  
@@ -50,6 +90,8 @@ def split_data(folder, target_size, train=.6, transpose=False):
                 filepath = os.path.join(root, filename)
                 data.append(filepath)
                 categories.append(num_classes)
+
+        class_map[num_classes] = current_dir
         num_classes += 1
 
     # load images asynchronically 
@@ -64,6 +106,10 @@ def split_data(folder, target_size, train=.6, transpose=False):
     categories = np.array(categories, dtype=np.int32)
 
     print "Number of samples =", data.shape
+    print class_map
+
+    if train == 1.0:
+        return (data, categories), None, class_map
 
     # split data in stratified fashion
     X_train, y_train, X_test, y_test = None, None, None, None
@@ -74,7 +120,7 @@ def split_data(folder, target_size, train=.6, transpose=False):
     X_train, X_test = data[train_index], data[test_index]
     y_train, y_test = categories[train_index], categories[test_index]
 
-    return (X_train, y_train), (X_test, y_test), num_classes
+    return (X_train, y_train), (X_test, y_test), class_map
 
 
 def get_pickle(indir, outfile, target_size, train=0.6, transpose=False):
@@ -82,11 +128,11 @@ def get_pickle(indir, outfile, target_size, train=0.6, transpose=False):
     Load images in a folder and output using pickle.
     """
 
-    train_data, test_data, n_classes = split_data(indir, target_size, 
+    train_data, test_data, class_map = split_data(indir, target_size, 
                                             train=train, transpose=transpose)
 
     # write the data with smaller size first (assume test_data)
-    write_list = [n_classes, test_data, train_data]
+    write_list = [class_map, test_data, train_data]
 
     with open(outfile, 'wb') as op:
         for data in write_list:
